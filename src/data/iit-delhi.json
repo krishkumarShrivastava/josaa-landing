@@ -1,0 +1,229 @@
+{
+  "collegeId": "iit-delhi",
+  "basicInfo": {
+    "name": "Indian Institute of Technology, Delhi",
+    "alsoKnownAs": "IITD",
+    "type": "Government",
+    "established": "1961",
+    "location": "Hauz Khas, New Delhi, Delhi - 110016",
+    "connectivity": {
+      "airport": "Indira Gandhi International Airport, Delhi (17 km)",
+      "railway": [
+        "Hazrat Nizamuddin Railway Station (11 km)",
+        "New Delhi Railway Station (13.5 km)",
+        "Anand Vihar Terminal Railway Station (24 km)"
+      ]
+    },
+    "campusFacilities": [
+      "Bank",
+      "Library",
+      "WiFi",
+      "Canteen",
+      "Boys Hostel",
+      "Girls Hostel",
+      "Sports",
+      "Medical"
+    ]
+  },
+  "admissionProcess": [
+    "Candidates must qualify the JEE (Main) exam and then appear for the JEE (Advanced) exam.",
+    "Candidates must secure at least 75% marks (65% for SC/ST/PwD) in Class XII OR be within the category-wise top 20 percentile in their respective Class XII board examination.",
+    "Admissions are based on the rank obtained in JEE (Advanced) through JoSAA Counselling."
+  ],
+  "coursesOffered": {
+    "btech_4_years": [
+      "Biotechnology and Biochemical Engineering",
+      "Civil Engineering",
+      "Chemical Engineering",
+      "Computer Science and Engineering",
+      "Engineering and Computational Mechanics",
+      "Electrical Engineering",
+      "Electrical Engineering (Power and Automation)",
+      "Engineering Physics",
+      "Mechanical Engineering",
+      "Mathematics and Computing",
+      "Materials Engineering",
+      "Production and Industrial Engineering",
+      "Textile Technology"
+    ],
+    "dual_degree_5_years": [
+      "Chemical Engineering",
+      "Computer Science and Engineering",
+      "Mathematics and Computing"
+    ]
+  },
+  "rankings": {
+    "international": [
+      {
+        "body": "Nature Index Global Institutional Rankings",
+        "rank": "389 (2026)",
+        "previous": "386 (2025)"
+      },
+      {
+        "body": "Academic Ranking of World Universities",
+        "rank": "601-700 (2025)",
+        "previous": "601-700 (2024)"
+      },
+      {
+        "body": "QS World University Rankings",
+        "rank": "123 (2026)",
+        "previous": "150 (2025)"
+      },
+      {
+        "body": "QS Asia University Rankings",
+        "rank": "59 (2026)",
+        "previous": "44 (2025)"
+      },
+      {
+        "body": "QS World University Rankings - Engineering & Technology",
+        "rank": "26 (2025)",
+        "previous": "45 (2024)"
+      },
+      {
+        "body": "QS World Subject Rankings - Chemical Engineering",
+        "rank": "93 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Civil & Structural Engineering",
+        "rank": "51-100 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Computer Science & IT",
+        "rank": "64 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Data Science & AI",
+        "rank": "51-100 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Electrical & Electronics Engineering",
+        "rank": "47 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Mechanical, Aeronautical & Manufacturing",
+        "rank": "61 (2025)",
+        "previous": "--"
+      },
+      {
+        "body": "QS World Subject Rankings - Mineral & Mining Engineering",
+        "rank": "51-100 (2025)",
+        "previous": "--"
+      }
+    ],
+    "national": [
+      {
+        "body": "NIRF Overall Rankings",
+        "rank": "4 (2025)",
+        "previous": "4 (2024)"
+      },
+      {
+        "body": "NIRF Engineering Rankings",
+        "rank": "2 (2025)",
+        "previous": "2 (2024)"
+      },
+      {
+        "body": "NIRF Research Rankings",
+        "rank": "3 (2025)",
+        "previous": "3 (2024)"
+      },
+      {
+        "body": "NIRF Innovation Rankings",
+        "rank": "7 (2025)",
+        "previous": "7 (2024)"
+      },
+      {
+        "body": "India Today Top Engineering Colleges",
+        "rank": "2 (2025)",
+        "previous": "1 (2024)"
+      },
+      {
+        "body": "Outlook India’s Top Govt. Technical Universities",
+        "rank": "4 (2025)",
+        "previous": "4 (2024)"
+      },
+      {
+        "body": "Outlook India's Top Govt. Engineering Colleges",
+        "rank": "2 (2025)",
+        "previous": "2 (2024)"
+      },
+      {
+        "body": "The Week Best Technical Universities India",
+        "rank": "2 (2023)",
+        "previous": "--"
+      },
+      {
+        "body": "The Week Top Engineering Colleges India",
+        "rank": "1 (2025)",
+        "previous": "1 (2024)"
+      }
+    ]
+  },
+  "fees": {
+    "instituteFee": {
+      "cautionMoney_Refundable": "₹8,000",
+      "oneTimeFees": "₹8,150",
+      "tuitionFee_PerSemester": "₹1,00,000",
+      "otherFees_PerSemester": "₹5,750",
+      "annualFees": "₹500",
+      "totalInstitute": "₹1,22,400"
+    },
+    "hostelFee": {
+      "messCautionMoney_Refundable": "₹15,000",
+      "oneTimeFees": "₹7,000",
+      "hostelSeatRent_PerSemester": "₹8,600",
+      "messCharges_PerSemester": "₹35,000",
+      "totalHostel": "₹65,600"
+    },
+    "feeWaivers": [
+      "100% Tuition Fee waiver for SC/ST/PwD students.",
+      "100% Tuition Fee remission for Most Economically Backward students with family income less than ₹1 lakh per annum.",
+      "2/3rd Tuition Fee remission for Other Economically Backward students with family income between ₹1 lakh to ₹5 lakh per annum."
+    ]
+  },
+  "placements": {
+    "2024": {
+      "medianPackage": "₹19.70 lakhs per annum",
+      "topRecruiters": [
+        "Air India",
+        "Bajaj Auto Limited & Chetak Technology Limited",
+        "Goldman Sachs",
+        "Google",
+        "Microsoft India",
+        "Morabu Hanshin Industry",
+        "OLA",
+        "Quadeye",
+        "Qualcomm",
+        "Texas Instruments"
+      ],
+      "branchWisePlacementPercentage": {
+        "btech": {
+          "Biotechnology and Biochemical Engineering": "61.67%",
+          "Civil Engineering": "56.10%",
+          "Chemical Engineering": "72.06%",
+          "Computer Science and Engineering": "86.92%",
+          "Engineering and Computational Mechanics": "74.19%",
+          "Electrical Engineering": "81.82%",
+          "Electrical Engineering (Power and Automation)": "80.70%",
+          "Engineering Physics": "52.08%",
+          "Mechanical Engineering": "69.77%",
+          "Mathematics and Computing": "82.22%",
+          "Materials Engineering": "80.00%",
+          "Production and Industrial Engineering": "80.60%",
+          "Textile Technology": "59.55%",
+          "Overall B.Tech": "72.97%"
+        },
+        "dualDegree": {
+          "Chemical Engineering": "71.74%",
+          "Computer Science and Engineering": "97.56%",
+          "Mathematics and Computing": "78.13%",
+          "Overall Dual Degree": "82.35%"
+        }
+      }
+    }
+  }
+}

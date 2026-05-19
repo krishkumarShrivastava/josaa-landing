@@ -11,18 +11,8 @@ import { Search, ArrowRight, ChevronRight, BookOpen, Layers, CheckCircle } from 
 
 gsap.registerPlugin(ScrollTrigger);
 
-const colleges = [
-  { id: "iit-bombay", name: "IIT Bombay", type: "IITs" },
-  { id: "IITD", name: "IIT Delhi", type: "IITs" },
-  { id: "IITM", name: "IIT Madras", type: "IITs" },
-  { id: "IITK", name: "IIT Kanpur", type: "IITs" },
-  { id: "IITKGP", name: "IIT Kharagpur", type: "IITs" },
-  { id: "NITT", name: "NIT Trichy", type: "NITs" },
-  { id: "NITW", name: "NIT Warangal", type: "NITs" },
-  { id: "NITK", name: "NIT Surathkal", type: "NITs" },
-  { id: "IIITH", name: "IIIT Hyderabad", type: "IIITs" },
-  { id: "IIITA", name: "IIIT Allahabad", type: "IIITs" },
-];
+import { masterColleges, collegeShortNames } from "@/data/compiledColleges";
+const colleges = masterColleges;
 
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
@@ -31,6 +21,7 @@ export default function Home() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const [activeFilter, setActiveFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 3D Tilt for Search Pill
   const mouseX = useMotionValue(0.5);
@@ -53,6 +44,14 @@ export default function Home() {
     mouseX.set(0.5);
     mouseY.set(0.5);
   }
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const element = document.getElementById("college-index");
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -93,10 +92,31 @@ export default function Home() {
     return () => ctx.revert();
   }, []);
 
-  const filteredColleges =
-    activeFilter === "All"
-      ? colleges
-      : colleges.filter((c) => c.type === activeFilter);
+  const filteredColleges = colleges.filter((c) => {
+    // 1. Category Filter
+    if (activeFilter !== "All" && c.type !== activeFilter) {
+      return false;
+    }
+    
+    // 2. Search Query Filter
+    if (searchQuery.trim() !== "") {
+      const query = searchQuery.toLowerCase().trim();
+      
+      // Match name
+      const matchesName = c.name.toLowerCase().includes(query);
+      
+      // Match ID directly
+      const matchesId = c.id.toLowerCase().replace(/-/g, "").includes(query.replace(/-/g, ""));
+      
+      // Match Abbreviation & Location aliases from our custom dictionary
+      const aliases = collegeShortNames[c.id] || collegeShortNames[c.id.toLowerCase()] || [];
+      const matchesAlias = aliases.some(alias => alias.toLowerCase().includes(query));
+      
+      return matchesName || matchesId || matchesAlias;
+    }
+    
+    return true;
+  });
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] selection:bg-[var(--foreground)] selection:text-[var(--background)] overflow-hidden">
@@ -147,12 +167,20 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Search by rank, name, or city..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearchSubmit();
+                  }
+                }}
                 className="w-full bg-transparent text-black text-2xl md:text-3xl font-bold tracking-tight px-6 py-4 md:py-6 outline-none placeholder:text-gray-400"
                 style={{ transform: "translateZ(40px)" }}
               />
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={() => handleSearchSubmit()}
                 className="bg-black text-white px-8 md:px-12 py-4 md:py-6 rounded-[32px] text-lg md:text-xl font-bold tracking-tight uppercase flex items-center gap-2 hover:bg-neutral-800 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.2)]"
                 style={{ transform: "translateZ(60px)" }}
               >
@@ -222,7 +250,7 @@ export default function Home() {
       </section>
 
       {/* COLLEGE INDEX */}
-      <section className="relative z-20 bg-[var(--background)] pb-32 px-6">
+      <section id="college-index" className="relative z-20 bg-[var(--background)] pb-32 px-6">
         <div className="max-w-screen-2xl mx-auto">
           <div className="sticky top-0 pt-6 pb-4 z-30 mb-12 bg-[var(--background)] border-b-[6px] border-[var(--foreground)] flex gap-6 overflow-x-auto no-scrollbar">
             {["All", "IITs", "NITs", "IIITs", "GFTIs"].map((filter) => (
@@ -236,24 +264,75 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="flex flex-col border-b-[6px] border-[var(--foreground)]">
-            {filteredColleges.map((college) => (
-              <Link
-                key={college.id}
-                href={`/college/${college.id.toLowerCase()}`}
-                className="group flex flex-col md:flex-row justify-between items-start md:items-center py-10 md:py-16 border-t-[6px] border-[var(--foreground)] hover:bg-[var(--foreground)] hover:text-[var(--background)] transition-colors duration-0 cursor-pointer px-6"
-              >
-                <div className="text-5xl md:text-8xl font-black tracking-tighter uppercase leading-none mb-4 md:mb-0">
-                  {college.name}
-                </div>
-                <div className="text-2xl md:text-4xl font-bold tracking-widest uppercase md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-0 flex items-center gap-4">
-                  {college.id.toUpperCase()} <ArrowRight size={40} />
-                </div>
-              </Link>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 min-w-0 overflow-hidden">
+            {filteredColleges.map((college) => {
+              // 1. Accents styling conditional coloring
+              // GFTI: Neon Green palette (border-green-500, text-green-400)
+              // IIIT: Neon Orange palette (border-orange-500, text-orange-400)
+              // IIT / NIT: Luminous Blue palette (border-blue-500, text-blue-400)
+              let borderClass = "border-[#3B82F6]/40 hover:border-[#3B82F6] hover:shadow-[0_0_20px_rgba(59,130,246,0.25)]";
+              let textAccentClass = "text-[#60A5FA]";
+              let bgAccentClass = "bg-[#3B82F6]/10";
+              let hoverBtnClass = "group-hover:bg-[#3B82F6] group-hover:text-black";
+              let typeLabel = "IIT";
+              
+              if (college.type === "GFTIs") {
+                borderClass = "border-green-500/40 hover:border-green-400 hover:shadow-[0_0_20px_rgba(34,197,94,0.25)]";
+                textAccentClass = "text-green-400";
+                bgAccentClass = "bg-green-500/10";
+                hoverBtnClass = "group-hover:bg-green-500 group-hover:text-black";
+                typeLabel = "GFTI";
+              } else if (college.type === "IIITs") {
+                borderClass = "border-orange-500/40 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.25)]";
+                textAccentClass = "text-orange-400";
+                bgAccentClass = "bg-orange-500/10";
+                hoverBtnClass = "group-hover:bg-orange-500 group-hover:text-black";
+                typeLabel = "IIIT";
+              } else if (college.type === "NITs") {
+                typeLabel = "NIT";
+              }
+
+              return (
+                <Link
+                  key={college.id}
+                  href={`/college/${college.id.toLowerCase()}`}
+                  className={`group relative flex flex-col justify-between bg-black border-[4px] p-6 md:p-8 transition-all duration-300 ease-out cursor-pointer min-w-0 break-words ${borderClass}`}
+                >
+                  {/* Top row with micro-badge */}
+                  <div className="flex justify-between items-center mb-6">
+                    <span className={`px-3 py-1 text-xs font-mono font-bold tracking-widest uppercase border border-current ${textAccentClass} ${bgAccentClass}`}>
+                      {typeLabel}
+                    </span>
+                    <span className="text-xs font-mono text-gray-500 tracking-wider">
+                      {college.id.toUpperCase().substring(0, 15)}
+                    </span>
+                  </div>
+
+                  {/* Body with giant brutalist college name */}
+                  <div className="flex-grow flex items-end mb-8 min-w-0">
+                    <h4 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-white break-words w-full">
+                      {college.name}
+                    </h4>
+                  </div>
+
+                  {/* Bottom interactive action bar */}
+                  <div className="flex justify-between items-center border-t border-gray-800 pt-4 mt-auto">
+                    <span className="text-xs font-mono font-bold tracking-widest text-gray-400 group-hover:text-white transition-colors uppercase">
+                      Explore Portal
+                    </span>
+                    <div className={`p-2 border border-current rounded-full transition-all duration-300 ${textAccentClass} ${hoverBtnClass}`}>
+                      <ArrowRight size={20} className="transform group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
             {filteredColleges.length === 0 && (
-              <div className="py-12 text-4xl font-bold tracking-tighter uppercase text-center border-t-[6px] border-[var(--foreground)]">
-                No colleges found in this category.
+              <div className="col-span-full py-20 px-8 border-[4px] border-dashed border-gray-800 bg-black text-white text-center font-bold flex flex-col items-center justify-center w-full min-w-0">
+                <span className="text-sm font-mono uppercase tracking-widest text-[#3B82F6] mb-4">Search System v1.0</span>
+                <p className="text-3xl md:text-5xl font-black uppercase tracking-tighter max-w-2xl leading-none">
+                  No institutes match your search. Try adjusting your keywords.
+                </p>
               </div>
             )}
           </div>
