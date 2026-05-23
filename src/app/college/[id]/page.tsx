@@ -8,6 +8,95 @@ import { useParams } from "next/navigation";
 import iitOpenRanks from "../../../data/iitOpenRanks.json";
 import iitDelhiData from "../../../data/iit-delhi.json";
 import { masterColleges, collegeShortNames } from "@/data/compiledColleges";
+import { collegesData } from "@/data/colleges";
+import allIitsData from "@/data/all_iits_combined.json";
+
+// JoSAA round cutoff data (2025: rounds 1-6, 2024: rounds 1-5)
+import r1_2025 from "@/data/round1_cutoffs.json";
+import r2_2025 from "@/data/round2_cutoffs.json";
+import r3_2025 from "@/data/round3_cutoffs.json";
+import r4_2025 from "@/data/round4_cutoffs.json";
+import r5_2025 from "@/data/round5_cutoffs.json";
+import r6_2025 from "@/data/round6_cutoffs.json";
+import r1_2024 from "@/data/round1_cutoffs_2024.json";
+import r2_2024 from "@/data/round2_cutoffs_2024.json";
+import r3_2024 from "@/data/round3_cutoffs_2024.json";
+import r4_2024 from "@/data/round4_cutoffs_2024.json";
+import r5_2024 from "@/data/round5_cutoffs_2024.json";
+
+type RawCutoffRow = {
+  Institute: string;
+  "Academic Program Name": string;
+  Quota: string;
+  "Seat Type": string;
+  Gender: string;
+  "Opening Rank": string;
+  "Closing Rank": string;
+};
+
+const JOSAA_ROUND_DATA: Record<string, Record<number, RawCutoffRow[]>> = {
+  "2025": {
+    1: r1_2025 as unknown as RawCutoffRow[],
+    2: r2_2025 as unknown as RawCutoffRow[],
+    3: r3_2025 as unknown as RawCutoffRow[],
+    4: r4_2025 as unknown as RawCutoffRow[],
+    5: r5_2025 as unknown as RawCutoffRow[],
+    6: r6_2025 as unknown as RawCutoffRow[],
+  },
+  "2024": {
+    1: r1_2024 as unknown as RawCutoffRow[],
+    2: r2_2024 as unknown as RawCutoffRow[],
+    3: r3_2024 as unknown as RawCutoffRow[],
+    4: r4_2024 as unknown as RawCutoffRow[],
+    5: r5_2024 as unknown as RawCutoffRow[],
+  },
+};
+
+const COLLEGE_ID_TO_JOSAA: Record<string, string[]> = {
+  "iit-bombay":      ["Indian Institute  of Technology Bombay"],
+  "iit-delhi":       ["Indian Institute  of Technology Delhi"],
+  "iit-madras":      ["Indian Institute  of Technology Madras"],
+  "iit-kanpur":      ["Indian Institute  of Technology Kanpur"],
+  "iit-kharagpur":   ["Indian Institute  of Technology Kharagpur"],
+  "iit-roorkee":     ["Indian Institute  of Technology Roorkee"],
+  "iit-guwahati":    ["Indian Institute  of Technology Guwahati"],
+  "iit-hyderabad":   ["Indian Institute  of Technology Hyderabad"],
+  "iit-bhu":         ["Indian Institute  of Technology (BHU) Varanasi"],
+  "iit-indore":      ["Indian Institute  of Technology Indore"],
+  "iit-gandhinagar": ["Indian Institute  of Technology Gandhinagar"],
+  "iit-ropar":       ["Indian Institute  of Technology Ropar"],
+  "iit-jodhpur":     ["Indian Institute  of Technology Jodhpur"],
+  "iit-mandi":       ["Indian Institute  of Technology Mandi"],
+  "iit-patna":       ["Indian Institute  of Technology Patna"],
+  "iit-bhubaneswar": ["Indian Institute  of Technology Bhubaneswar"],
+  "iit-ism":         ["Indian Institute  of Technology (ISM) Dhanbad"],
+  "iit-tirupati":    ["Indian Institute of Technology Tirupati"],
+  "iit-goa":         ["Indian Institute of Technology Goa"],
+  "iit-palakkad":    ["Indian Institute  of Technology Palakkad"],
+  "iit-jammu":       ["Indian Institute of Technology Jammu"],
+  "iit-dharwad":     ["Indian Institute of Technology Dharwad"],
+  "iit-bhilai":      ["Indian Institute of Technology Bhilai"],
+};
+
+function getJoSAACutoffs(collegeId: string, exactName: string, year: string, roundNum: number) {
+  const data = JOSAA_ROUND_DATA[year]?.[roundNum];
+  if (!data) return [];
+  const norm = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const names = (COLLEGE_ID_TO_JOSAA[collegeId] ?? []).map(norm);
+  return data
+    .filter(r => names.length > 0
+      ? names.some(n => norm(r.Institute) === n)
+      : norm(r.Institute) === norm(exactName) || norm(r.Institute).includes(collegeId.replace(/-/g, " "))
+    )
+    .map(r => ({
+      branch: r["Academic Program Name"],
+      quota: r.Quota,
+      category: r["Seat Type"],
+      gender: r.Gender === "Female-only (including Supernumerary)" ? "Female Only" : r.Gender,
+      openingRank: parseInt(r["Opening Rank"]) || 0,
+      closingRank: parseInt(r["Closing Rank"]) || 0,
+    }));
+}
 import nitOpenRanks from "../../../data/nitOpenRanks.json";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -540,12 +629,197 @@ function getCollegeBasicInfo(id: string, name: string, type: string) {
   };
 }
 
+// Helper type for placement year records
+type PlacementYearRecord = {
+  averagePackage: string;
+  medianPackage: string;
+  highlights: { branch: string; rate: string }[];
+};
+
 export default function DeepLuminousCollegePage() {
   const params = useParams();
   const id = typeof params?.id === "string" ? params.id.toLowerCase() : "iit-bombay";
+  const hasRichData = !!(collegesData as Record<string, unknown>)[id];
   const isIITBombay = id === "iit-bombay" || id === "iitb";
 
-  const [activeTab, setActiveTab] = useState(isIITBombay ? "Seats" : "Overview");
+  // Load college record as Record<string,any> so every property access is any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const _col = ((collegesData as Record<string, any>)[id]
+    ?? (collegesData as Record<string, any>)["iit-bombay"]) as Record<string, any>;
+
+  // ── COLLEGE_DATA (shadows module-level const) ──────────────────────────────
+  const COLLEGE_DATA = {
+    basicInfo: {
+      name: String(_col.name ?? ""),
+      alsoKnownAs: (Array.isArray(_col.alsoKnownAs)
+        ? (_col.alsoKnownAs as string[]).join(", ")
+        : String(_col.alsoKnownAs ?? id.toUpperCase())),
+      type: String(_col.type ?? "Government"),
+      established: String(_col.established ?? "N/A"),
+      location: String(_col.location ?? ""),
+      connectivity: {
+        airport: String(_col.overview?.connectivity?.airport ?? "Nearest Airport (~25 km)"),
+        railway: (Array.isArray(_col.overview?.connectivity?.railway)
+          ? (_col.overview.connectivity.railway as string[])
+          : typeof _col.overview?.connectivity?.railway === "string"
+          ? [String(_col.overview.connectivity.railway)]
+          : ["Nearest Railway Junction (~5 km)"]) as string[],
+      },
+      campusFacilities: (Array.isArray(_col.basicInfo?.campusFacilities)
+        ? (_col.basicInfo.campusFacilities as string[])
+        : ["WiFi", "Library", "Boys Hostel", "Girls Hostel", "Sports", "Medical", "Bank", "Canteen"]),
+    },
+    admissionProcess: (Array.isArray(_col.admissionProcess)
+      ? (_col.admissionProcess as string[])
+      : []) as string[],
+    coursesOffered: {
+      "Programs Offered": Array.from(
+        new Set(
+          (Array.isArray(_col.seatMatrix) ? (_col.seatMatrix as { branch: string }[]) : [])
+            .map((r) => r.branch)
+        )
+      ) as string[],
+    },
+    rankings: {
+      national: (Array.isArray(_col.rankings) ? (_col.rankings as { body: unknown; rank: unknown; previous?: unknown }[]) : [])
+        .map((r) => ({
+          body: String(r.body ?? ""),
+          rank: String(r.rank ?? "N/A"),
+          previous: String(r.previous ?? "--"),
+        })) as { body: string; rank: string; previous: string }[],
+      international: [] as { body: string; rank: string; previous: string }[],
+    },
+    // placements: build a Record<year, PlacementYearRecord> from raw data
+    placements: ((): Record<string, PlacementYearRecord> => {
+      const raw = (_col.placements ?? {}) as Record<string, unknown>;
+      const out: Record<string, PlacementYearRecord> = {};
+      for (const [yr, val] of Object.entries(raw)) {
+        if (typeof val !== "object" || val === null) continue;
+        const v = val as Record<string, unknown>;
+        // highlights can come from v.highlights OR v.branchHighlights (compile_colleges format)
+        const hl: { branch: string; rate: string }[] = Array.isArray(v.highlights)
+          ? (v.highlights as { branch?: unknown; rate?: unknown }[]).map((h) => ({
+              branch: String(h.branch ?? ""),
+              rate: String(h.rate ?? "N/A"),
+            }))
+          : Array.isArray(v.branchHighlights)
+          ? (v.branchHighlights as { branch?: unknown; placed?: unknown; rate?: unknown }[]).map((h) => ({
+              branch: String(h.branch ?? ""),
+              rate: String(h.placed ?? h.rate ?? "N/A"),
+            }))
+          : [];
+        out[yr] = {
+          averagePackage: String(v.averagePackage ?? "N/A"),
+          medianPackage: String(v.medianPackage ?? "N/A"),
+          highlights: hl,
+        };
+      }
+      // Guarantee "2024" key always exists
+      if (!out["2024"]) {
+        const ph = (_col.placements ?? {}) as Record<string, unknown>;
+        const bh = Array.isArray(ph.branchHighlights)
+          ? (ph.branchHighlights as { branch?: unknown; placed?: unknown; rate?: unknown }[]).map((b) => ({
+              branch: String(b.branch ?? ""),
+              rate: String(b.placed ?? b.rate ?? "N/A"),
+            }))
+          : [];
+        out["2024"] = {
+          averagePackage: String(ph.averagePackage ?? "N/A"),
+          medianPackage: String(ph.medianPackage ?? "N/A"),
+          highlights: bh,
+        };
+      }
+      return out;
+    })(),
+    fees: (_col.fees ?? {}) as Record<string, unknown>,
+    cutoffs: (Array.isArray(_col.cutoffs) ? (_col.cutoffs as Record<string, unknown>[]) : []).map((c) => ({
+      branch: String(c.branch ?? ""),
+      closingRank: Number(c.round6Closing ?? c.closingRank ?? 1000),
+    })) as { branch: string; closingRank: number }[],
+    seatMatrix: (Array.isArray(_col.seatMatrix)
+      ? (_col.seatMatrix as Record<string, unknown>[])
+      : []) as Record<string, unknown>[],
+  };
+
+  // ── DATA (shadows module-level const) ─────────────────────────────────────
+  // IMPORTANT: cast the full (x || {}) expression so TypeScript infers Record<string,string>
+  //            NOT (x as Record<string,string>) || {} which widens to {}
+  const DATA = {
+    name: (Array.isArray(_col.alsoKnownAs)
+      ? String((_col.alsoKnownAs as string[])[0])
+      : String(_col.alsoKnownAs ?? id.toUpperCase())),
+    fullName: String(_col.name ?? ""),
+    established: Number(_col.established ?? 1960),
+    location: String(_col.location ?? ""),
+    type: String(_col.type ?? "Government"),
+    stats: {
+      placementRate: String((_col.placements as Record<string, unknown>)?.overallPlacementRate ?? "N/A"),
+      avgPackage: String((_col.placements as Record<string, unknown>)?.averagePackage ?? "N/A"),
+      nirfRank: String(
+        ((Array.isArray(_col.rankings) ? (_col.rankings as Record<string, unknown>[]) : [])
+          .find((r) => String(r.body ?? "").includes("Engineering"))
+          ?? (Array.isArray(_col.rankings) ? (_col.rankings as Record<string, unknown>[]) : [])[0]
+          ?? { rank: "N/A" }).rank ?? "N/A"
+      ),
+    },
+    fees: {
+      // Cast the whole (x || {}) expression — this is what makes value: string not unknown
+      instituteFee: (_col.fees?.instituteFee || {}) as Record<string, string>,
+      hostelFee: (_col.fees?.hostelFee || {}) as Record<string, string>,
+      feeWaivers: (Array.isArray(_col.fees?.feeWaivers)
+        ? (_col.fees.feeWaivers as string[])
+        : typeof _col.fees?.feeWaivers === "string"
+        ? [String(_col.fees.feeWaivers)]
+        : []) as string[],
+    },
+    seats: {
+      totalSeatSummary: {
+        overallTotal: (Array.isArray(_col.seatMatrix)
+          ? (_col.seatMatrix as { seats?: number }[]).reduce((a, r) => a + Number(r.seats ?? 0), 0)
+          : 0),
+        branches: Array.from(
+          new Set(
+            (Array.isArray(_col.seatMatrix) ? (_col.seatMatrix as { branch: string }[]) : [])
+              .map((r) => r.branch)
+          )
+        ).map((bName) => {
+          const sm = (Array.isArray(_col.seatMatrix)
+            ? (_col.seatMatrix as { branch: string; gender: string; seats?: number }[])
+            : []);
+          const gnSeats = sm.filter((r) => r.branch === bName && r.gender === "Gender-Neutral")
+            .reduce((a, r) => a + Number(r.seats ?? 0), 0);
+          const foSeats = sm.filter((r) => r.branch === bName && r.gender === "Female-Only")
+            .reduce((a, r) => a + Number(r.seats ?? 0), 0);
+          return { name: bName, genderNeutral: gnSeats, femaleOnly: foSeats };
+        }),
+      },
+      categoryWiseData: {} as Record<string, unknown>,
+    },
+  };
+
+  // ── SEAT_MATRIX_DATA (shadows module-level const) ──────────────────────────
+  const SEAT_MATRIX_DATA: Record<
+    string,
+    { "Gender-Neutral": { name: string; seats: number; courseType: string }[];
+      "Female-Only":   { name: string; seats: number; courseType: string }[] }
+  > = {};
+  (Array.isArray(_col.seatMatrix)
+    ? (_col.seatMatrix as { branch?: unknown; gender?: unknown; seats?: unknown; category?: unknown; courseType?: unknown }[])
+    : []
+  ).forEach((row) => {
+    const cat = String(row.category ?? "General");
+    const gen = row.gender === "Gender-Neutral" ? "Gender-Neutral" : "Female-Only";
+    if (!SEAT_MATRIX_DATA[cat]) {
+      SEAT_MATRIX_DATA[cat] = { "Gender-Neutral": [], "Female-Only": [] };
+    }
+    SEAT_MATRIX_DATA[cat][gen].push({
+      name: String(row.branch ?? ""),
+      seats: Number(row.seats ?? 0),
+      courseType: String(row.courseType ?? "4-Year B.E./B.Tech. Course"),
+    });
+  });
+
+  const [activeTab, setActiveTab] = useState("Overview");
   const [logoError, setLogoError] = useState(false);
   const [buildingError, setBuildingError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -554,6 +828,15 @@ export default function DeepLuminousCollegePage() {
   const [seatCategory, setSeatCategory] = useState("All");
   const [seatPool, setSeatPool] = useState("All");
   const [placementYear, setPlacementYear] = useState("2024");
+
+  // Cutoff tab state
+  const [cutoffYear, setCutoffYear] = useState("2025");
+  const [cutoffRound, setCutoffRound] = useState(6);
+  const [cutoffQuota, setCutoffQuota] = useState("All");
+  const [cutoffCategory, setCutoffCategory] = useState("All");
+  const [cutoffGender, setCutoffGender] = useState("All");
+  const [cutoffBranch, setCutoffBranch] = useState("All");
+  const [cutoffSearch, setCutoffSearch] = useState("");
 
   const heroRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
@@ -593,7 +876,7 @@ export default function DeepLuminousCollegePage() {
     return () => ctx.revert();
   }, []);
 
-    if (!isIITBombay) {
+    if (!hasRichData) {
     const instName = getInstituteName(id);
     
     const activeCollege = masterColleges.find(c => c.id.toLowerCase() === id.toLowerCase()) || 
@@ -785,56 +1068,130 @@ export default function DeepLuminousCollegePage() {
                 </div>
               </div>
             ) : activeTab === 'Cutoffs' ? (
-              <div className="flex flex-col gap-8 min-w-0 animate-in fade-in duration-500">
-                <div className="flex flex-col gap-4">
-                  <label className="text-sm font-mono uppercase tracking-widest text-neutral-400">Search Programs</label>
-                  <input
-                    type="text"
-                    placeholder="FILTER BY BRANCH OR DEGREE (E.G. COMPUTER SCIENCE)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className={`bg-black ${accentText} border-[1px] ${borderStyle} p-6 text-xl font-bold uppercase tracking-widest outline-none ${searchFocusStyle} transition-colors`}
-                  />
-                </div>
-
-                {filteredCutoffs.length > 0 ? (
-                  <div className={`border-[1px] ${borderStyle} bg-[#0A0A0A]`}>
-                    <div className={`p-8 md:p-12 border-b-[1px] ${borderStyle} bg-[#111111] flex flex-wrap justify-between items-center gap-4`}>
-                      <div>
-                        <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">Expected Cutoffs</h2>
-                        <p className="font-mono text-sm uppercase tracking-widest opacity-50 mt-2">JEE Advanced · General · Gender-Neutral · Round 6</p>
-                      </div>
-                      <span className={`${accentText} font-mono text-sm uppercase tracking-widest border-[1px] ${isNit ? 'border-yellow-400' : 'border-blue-500'} px-4 py-2`}>Official JoSAA Data</span>
-                    </div>
-                    <div className="w-full overflow-x-auto no-scrollbar">
-                      <table className="w-full text-left border-collapse min-w-[500px]">
-                        <thead>
-                          <tr className="bg-[#1E293B]">
-                            <th className="p-6 text-sm font-mono uppercase tracking-widest border-r-[1px] border-[#0A0A0A] w-12 opacity-50">#</th>
-                            <th className="p-6 text-sm font-mono uppercase tracking-widest border-r-[1px] border-[#0A0A0A] opacity-50">Branch Program</th>
-                            <th className="p-6 text-sm font-mono uppercase tracking-widest opacity-50">Closing Rank</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredCutoffs.map((c, i) => (
-                            <tr key={i} className={`border-b-[1px] ${borderStyle} ${tableHoverStyle} transition-none cursor-default`}>
-                              <td className={`p-6 text-sm font-mono border-r-[1px] ${borderStyle} opacity-40`}>{String(i+1).padStart(2,'0')}</td>
-                              <td className="p-6 text-xl md:text-2xl font-bold uppercase tracking-tighter border-r-[1px] border-neutral-800 break-words">{c.program}</td>
-                              <td className={`p-6 text-3xl font-black tracking-tighter ${accentText}`}>{c.closingRank}</td>
-                            </tr>
+              (() => {
+                const exactCollegeInfo = allIitsData.find(c => c.collegeId === id);
+                const actualExactName = exactCollegeInfo ? exactCollegeInfo.basicInfo.name : instName;
+                const _allCutoffs = getJoSAACutoffs(id, actualExactName, cutoffYear, cutoffRound);
+                const _cutoffQuotas     = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.quota))).sort()];
+                const _cutoffCategories = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.category))).sort()];
+                const _cutoffGenders    = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.gender))).sort()];
+                const _cutoffBranches   = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.branch))).sort()];
+                const _filtered = _allCutoffs.filter(r => {
+                  if (cutoffQuota    !== "All" && r.quota    !== cutoffQuota)    return false;
+                  if (cutoffCategory !== "All" && r.category !== cutoffCategory) return false;
+                  if (cutoffGender   !== "All" && r.gender   !== cutoffGender)   return false;
+                  if (cutoffBranch   !== "All" && r.branch   !== cutoffBranch)   return false;
+                  if (cutoffSearch.trim() && !r.branch.toLowerCase().includes(cutoffSearch.toLowerCase())) return false;
+                  return true;
+                });
+                const _availRounds = Object.keys(JOSAA_ROUND_DATA[cutoffYear] || {}).map(Number).sort((a,b)=>a-b);
+                return (
+                  <div className="flex flex-col gap-6 min-w-0 animate-in fade-in duration-500">
+                    {/* Year + Round */}
+                    <div className="flex flex-wrap gap-6 items-end">
+                      <div className="flex flex-col gap-2">
+                        <span className={`text-xs font-mono uppercase tracking-widest ${accentText}`}>Year</span>
+                        <div className="flex gap-2">
+                          {["2025","2024"].map(y => (
+                            <button key={y} onClick={() => { setCutoffYear(y); setCutoffRound(y==="2025"?6:5); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                              className={`px-5 py-2 text-lg font-black tracking-tighter uppercase border-[1px] transition-none ${cutoffYear===y ? activeTabStyle : `${borderStyle} text-neutral-500 hover:text-white`}`}>
+                              {y}
+                            </button>
                           ))}
-                        </tbody>
-                      </table>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <span className={`text-xs font-mono uppercase tracking-widest ${accentText}`}>Round</span>
+                        <div className="flex gap-2 flex-wrap">
+                          {_availRounds.map(r => (
+                            <button key={r} onClick={() => { setCutoffRound(r); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                              className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[1px] transition-none ${cutoffRound===r ? activeTabStyle : `${borderStyle} text-neutral-500 hover:text-white`}`}>
+                              R{r}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="ml-auto flex gap-8 items-end">
+                        <div><div className="text-xs font-mono uppercase tracking-widest opacity-40">Total</div><div className={`text-4xl font-black tracking-tighter`}>{_allCutoffs.length}</div></div>
+                        <div><div className="text-xs font-mono uppercase tracking-widest opacity-40">Shown</div><div className={`text-4xl font-black tracking-tighter ${accentText}`}>{_filtered.length}</div></div>
+                      </div>
                     </div>
+
+                    {/* Filters */}
+                    <div className={`border-[1px] ${borderStyle} p-6 bg-[#0A0A0A] flex flex-col gap-4`}>
+                      <input value={cutoffSearch} onChange={e => setCutoffSearch(e.target.value)}
+                        placeholder="Search branch / program name…"
+                        className={`w-full text-lg font-bold border-b-[1px] ${borderStyle} bg-transparent text-white outline-none pb-2 placeholder:opacity-25 ${searchFocusStyle}`} />
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[
+                          {label:"Quota",    opts:_cutoffQuotas,     val:cutoffQuota,    fn:setCutoffQuota},
+                          {label:"Category", opts:_cutoffCategories, val:cutoffCategory, fn:setCutoffCategory},
+                          {label:"Gender",   opts:_cutoffGenders,    val:cutoffGender,   fn:setCutoffGender},
+                          {label:"Branch",   opts:_cutoffBranches,   val:cutoffBranch,   fn:setCutoffBranch},
+                        ].map(({label,opts,val,fn}) => (
+                          <div key={label} className="flex flex-col gap-1">
+                            <label className={`text-xs font-mono uppercase tracking-widest opacity-50`}>{label}</label>
+                            <select value={val} onChange={e => fn(e.target.value)}
+                              className={`text-sm font-bold uppercase border-b-[1px] ${borderStyle} bg-[#0A0A0A] text-white outline-none pb-1 cursor-pointer appearance-none rounded-none ${searchFocusStyle}`}>
+                              {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                      {(cutoffQuota!=="All"||cutoffCategory!=="All"||cutoffGender!=="All"||cutoffBranch!=="All"||cutoffSearch) && (
+                        <button onClick={() => { setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                          className={`self-start px-4 py-1 border-[1px] ${borderStyle} text-xs font-mono uppercase tracking-widest ${accentText} ${tableHoverStyle} transition-none`}>
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Table */}
+                    {!_allCutoffs.length ? (
+                      <div className={`border-[1px] ${borderStyle} p-20 text-center bg-[#0A0A0A]`}>
+                        <p className="text-4xl font-black uppercase tracking-tighter opacity-25">No JoSAA Data Available</p>
+                        <p className="text-sm font-mono uppercase tracking-widest opacity-20 mt-4">{cutoffYear} · Round {cutoffRound}</p>
+                      </div>
+                    ) : !_filtered.length ? (
+                      <div className={`border-[1px] ${borderStyle} p-20 text-center bg-[#0A0A0A]`}>
+                        <p className="text-3xl font-black uppercase tracking-tighter">No Results Match Filters</p>
+                        <button onClick={() => { setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                          className={`mt-6 px-6 py-2 border-[1px] ${borderStyle} text-sm font-black uppercase tracking-widest ${accentText} ${tableHoverStyle} transition-none`}>
+                          Clear Filters
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`w-full overflow-x-auto no-scrollbar border-[1px] ${borderStyle}`}>
+                        <table className="w-full text-left border-collapse" style={{minWidth:860}}>
+                          <thead>
+                            <tr className="bg-[#1E293B]">
+                              {["#","Branch / Program","Quota","Category","Gender","Opening","Closing"].map((h,i) => (
+                                <th key={h} className={`p-4 text-xs font-mono uppercase tracking-widest ${i<6?"border-r-[1px] border-[#0A0A0A]":""} ${i>=5?"text-right":""}`}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {_filtered.map((r, i) => (
+                              <tr key={i} className={`border-b-[1px] ${borderStyle} ${tableHoverStyle} transition-none cursor-default`}>
+                                <td className={`p-4 text-xs font-mono opacity-30 border-r-[1px] ${borderStyle}`}>{String(i+1).padStart(3,"0")}</td>
+                                <td className={`p-4 text-sm font-bold uppercase tracking-tight border-r-[1px] ${borderStyle} break-words`} style={{maxWidth:260}}>{r.branch}</td>
+                                <td className={`p-4 text-sm font-bold uppercase border-r-[1px] ${borderStyle} whitespace-nowrap`}>{r.quota}</td>
+                                <td className={`p-4 text-sm font-bold uppercase border-r-[1px] ${borderStyle} whitespace-nowrap`}>{r.category}</td>
+                                <td className={`p-4 text-xs font-bold uppercase border-r-[1px] ${borderStyle} whitespace-nowrap`}>{r.gender}</td>
+                                <td className={`p-4 text-xl font-black tracking-tighter text-right border-r-[1px] ${borderStyle} whitespace-nowrap opacity-50`}>{r.openingRank.toLocaleString("en-IN")}</td>
+                                <td className={`p-4 text-2xl font-black tracking-tighter text-right whitespace-nowrap ${accentText}`}>{r.closingRank.toLocaleString("en-IN")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="text-xs font-mono uppercase tracking-widest opacity-25 text-center">
+                      JoSAA {cutoffYear} Official Data · Round {cutoffRound} · {_filtered.length} of {_allCutoffs.length} rows
+                    </p>
                   </div>
-                ) : (
-                  <div className={`p-12 border-[1px] ${borderStyle} text-center text-neutral-500 font-mono text-sm uppercase tracking-widest bg-[#0A0A0A]`}>
-                    {instituteCutoffs.length === 0 
-                      ? `No cutoff data found for ${instName}`
-                      : `No programs found matching "${searchQuery}"`}
-                  </div>
-                )}
-              </div>
+                );
+              })()
             ) : (
               <div className={`flex-1 flex flex-col items-center justify-center border-[1px] ${borderStyle} animate-in fade-in duration-500 min-h-[40vh] min-w-0 overflow-hidden bg-[#0A0A0A] p-12 text-center`}>
                 <span className={`text-sm font-mono uppercase tracking-widest ${accentText} mb-4`}>JoSAA Portal 2026</span>
@@ -1025,37 +1382,128 @@ export default function DeepLuminousCollegePage() {
               </div>
             </div>
           ) : activeTab === "Cutoffs" ? (
-            <div className="flex flex-col gap-8 min-w-0 animate-in fade-in duration-500">
-              <div className="border-[1px] border-[#1E293B] bg-[#0A0A0A]">
-                <div className="p-8 md:p-12 border-b-[1px] border-[#1E293B] bg-[#111111] flex flex-wrap justify-between items-center gap-4">
-                  <div>
-                    <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter">Expected Cutoffs</h2>
-                    <p className="font-mono text-sm uppercase tracking-widest opacity-50 mt-2">JEE Advanced · General · Gender-Neutral · Round 6</p>
+            (() => {
+              const _allCutoffs = getJoSAACutoffs(id, COLLEGE_DATA.basicInfo?.name || "", cutoffYear, cutoffRound);
+              const _cutoffQuotas     = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.quota))).sort()];
+              const _cutoffCategories = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.category))).sort()];
+              const _cutoffGenders    = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.gender))).sort()];
+              const _cutoffBranches   = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.branch))).sort()];
+              const _filtered = _allCutoffs.filter(r => {
+                if (cutoffQuota    !== "All" && r.quota    !== cutoffQuota)    return false;
+                if (cutoffCategory !== "All" && r.category !== cutoffCategory) return false;
+                if (cutoffGender   !== "All" && r.gender   !== cutoffGender)   return false;
+                if (cutoffBranch   !== "All" && r.branch   !== cutoffBranch)   return false;
+                if (cutoffSearch.trim() && !r.branch.toLowerCase().includes(cutoffSearch.toLowerCase())) return false;
+                return true;
+              });
+              const _availRounds = Object.keys(JOSAA_ROUND_DATA[cutoffYear] || {}).map(Number).sort((a,b)=>a-b);
+              return (
+                <div className="flex flex-col gap-6 min-w-0 animate-in fade-in duration-500">
+                  {/* Year + Round */}
+                  <div className="flex flex-wrap gap-6 items-end">
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs font-mono uppercase tracking-widest opacity-40">Year</span>
+                      <div className="flex gap-2">
+                        {["2025","2024"].map(y => (
+                          <button key={y} onClick={() => { setCutoffYear(y); setCutoffRound(y==="2025"?6:5); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                            className={`px-5 py-2 text-lg font-black tracking-tighter uppercase border-[2px] transition-none ${cutoffYear===y?"bg-[#3B82F6] text-black border-[#3B82F6]":"border-[#1E293B] text-neutral-400 hover:text-white hover:border-white"}`}>
+                            {y}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs font-mono uppercase tracking-widest opacity-40">Round</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {_availRounds.map(r => (
+                          <button key={r} onClick={() => { setCutoffRound(r); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                            className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[2px] transition-none ${cutoffRound===r?"bg-[#3B82F6] text-black border-[#3B82F6]":"border-[#1E293B] text-neutral-400 hover:text-white hover:border-white"}`}>
+                            R{r}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="ml-auto flex gap-8 items-end">
+                      <div><div className="text-xs font-mono uppercase tracking-widest opacity-40">Total</div><div className="text-4xl font-black tracking-tighter">{_allCutoffs.length}</div></div>
+                      <div><div className="text-xs font-mono uppercase tracking-widest opacity-40">Shown</div><div className="text-4xl font-black tracking-tighter text-[#3B82F6]">{_filtered.length}</div></div>
+                    </div>
                   </div>
-                  <span className="text-[#3B82F6] font-mono text-sm uppercase tracking-widest border-[1px] border-[#3B82F6] px-4 py-2">2024 Data</span>
-                </div>
-                <div className="w-full overflow-x-auto no-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[500px]">
-                    <thead>
-                      <tr className="bg-[#1E293B]">
-                        <th className="p-6 text-sm font-mono uppercase tracking-widest border-r-[1px] border-[#0A0A0A] w-3/4">#</th>
-                        <th className="p-6 text-sm font-mono uppercase tracking-widest border-r-[1px] border-[#0A0A0A]">Branch</th>
-                        <th className="p-6 text-sm font-mono uppercase tracking-widest">Closing Rank</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {COLLEGE_DATA.cutoffs.map((c, i) => (
-                        <tr key={i} className="border-b-[1px] border-[#1E293B] hover:bg-[#3B82F6] hover:text-black transition-none cursor-default">
-                          <td className="p-6 text-sm font-mono border-r-[1px] border-[#1E293B] opacity-40">{String(i+1).padStart(2,'0')}</td>
-                          <td className="p-6 text-2xl md:text-3xl font-bold uppercase tracking-tighter border-r-[1px] border-[#1E293B] break-words">{c.branch}</td>
-                          <td className="p-6 text-4xl font-black tracking-tighter text-[#3B82F6]">{c.closingRank}</td>
-                        </tr>
+
+                  {/* Filters */}
+                  <div className="border-[1px] border-[#1E293B] p-6 bg-[#0A0A0A] flex flex-col gap-4">
+                    <input value={cutoffSearch} onChange={e => setCutoffSearch(e.target.value)}
+                      placeholder="Search branch / program name…"
+                      className="w-full text-lg font-bold border-b-[2px] border-[#1E293B] bg-transparent text-white outline-none pb-2 placeholder:opacity-25 focus:border-[#3B82F6]" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        {label:"Quota",    opts:_cutoffQuotas,     val:cutoffQuota,    fn:setCutoffQuota},
+                        {label:"Category", opts:_cutoffCategories, val:cutoffCategory, fn:setCutoffCategory},
+                        {label:"Gender",   opts:_cutoffGenders,    val:cutoffGender,   fn:setCutoffGender},
+                        {label:"Branch",   opts:_cutoffBranches,   val:cutoffBranch,   fn:setCutoffBranch},
+                      ].map(({label,opts,val,fn}) => (
+                        <div key={label} className="flex flex-col gap-1">
+                          <label className="text-xs font-mono uppercase tracking-widest opacity-40">{label}</label>
+                          <select value={val} onChange={e => fn(e.target.value)}
+                            className="text-sm font-bold uppercase border-b-[2px] border-[#1E293B] bg-[#0A0A0A] text-white outline-none pb-1 cursor-pointer appearance-none rounded-none focus:border-[#3B82F6]">
+                            {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                    {(cutoffQuota!=="All"||cutoffCategory!=="All"||cutoffGender!=="All"||cutoffBranch!=="All"||cutoffSearch) && (
+                      <button onClick={() => { setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                        className="self-start px-4 py-1 border-[1px] border-[#3B82F6] text-xs font-mono uppercase tracking-widest text-[#3B82F6] hover:bg-[#3B82F6] hover:text-black transition-none">
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Table */}
+                  {!_allCutoffs.length ? (
+                    <div className="border-[1px] border-[#1E293B] p-20 text-center bg-[#0A0A0A]">
+                      <p className="text-4xl font-black uppercase tracking-tighter opacity-25">No JoSAA Data Available</p>
+                      <p className="text-sm font-mono uppercase tracking-widest opacity-20 mt-4">{cutoffYear} · Round {cutoffRound}</p>
+                    </div>
+                  ) : !_filtered.length ? (
+                    <div className="border-[1px] border-[#1E293B] p-20 text-center bg-[#0A0A0A]">
+                      <p className="text-3xl font-black uppercase tracking-tighter">No Results Match Filters</p>
+                      <button onClick={() => { setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
+                        className="mt-6 px-6 py-2 border-[2px] border-[#3B82F6] text-sm font-black uppercase tracking-widest text-[#3B82F6] hover:bg-[#3B82F6] hover:text-black transition-none">
+                        Clear Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full overflow-x-auto no-scrollbar border-[1px] border-[#1E293B]">
+                      <table className="w-full text-left border-collapse" style={{minWidth:860}}>
+                        <thead>
+                          <tr className="bg-[#1E293B]">
+                            {["#","Branch / Program","Quota","Category","Gender","Opening","Closing"].map((h,i) => (
+                              <th key={h} className={`p-4 text-xs font-mono uppercase tracking-widest ${i<6?"border-r-[1px] border-[#0A0A0A]":""} ${i>=5?"text-right":""}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {_filtered.map((r, i) => (
+                            <tr key={i} className="border-b-[1px] border-[#1E293B] hover:bg-[#3B82F6] hover:text-black transition-none cursor-default">
+                              <td className="p-4 text-xs font-mono opacity-30 border-r-[1px] border-[#1E293B]">{String(i+1).padStart(3,"0")}</td>
+                              <td className="p-4 text-sm font-bold uppercase tracking-tight border-r-[1px] border-[#1E293B] break-words" style={{maxWidth:260}}>{r.branch}</td>
+                              <td className="p-4 text-sm font-bold uppercase border-r-[1px] border-[#1E293B] whitespace-nowrap">{r.quota}</td>
+                              <td className="p-4 text-sm font-bold uppercase border-r-[1px] border-[#1E293B] whitespace-nowrap">{r.category}</td>
+                              <td className="p-4 text-xs font-bold uppercase border-r-[1px] border-[#1E293B] whitespace-nowrap">{r.gender}</td>
+                              <td className="p-4 text-xl font-black tracking-tighter text-right border-r-[1px] border-[#1E293B] whitespace-nowrap opacity-50">{r.openingRank.toLocaleString("en-IN")}</td>
+                              <td className="p-4 text-2xl font-black tracking-tighter text-right whitespace-nowrap text-[#3B82F6]">{r.closingRank.toLocaleString("en-IN")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="text-xs font-mono uppercase tracking-widest opacity-25 text-center">
+                    JoSAA {cutoffYear} Official Data · Round {cutoffRound} · {_filtered.length} of {_allCutoffs.length} rows
+                  </p>
                 </div>
-              </div>
-            </div>
+              );
+            })()
           ) : activeTab === "Placements" ? (
             <div className="flex flex-col gap-8 min-w-0 animate-in fade-in duration-500">
               <div className="flex flex-wrap gap-3">
@@ -1081,7 +1529,7 @@ export default function DeepLuminousCollegePage() {
                       )}
                     </div>
                     <div className="flex flex-col">
-                      {pd.highlights.map((h, i) => (
+                      {(pd.highlights as { branch: string; rate: string }[]).map((h, i) => (
                         <div key={i} className="flex flex-col md:flex-row justify-between items-start md:items-center p-8 border-b-[1px] border-[#1E293B] last:border-b-0 hover:bg-[#3B82F6] hover:text-black transition-none cursor-default">
                           <span className="font-bold text-xl md:text-2xl uppercase tracking-tighter mb-2 md:mb-0 break-words">{h.branch}</span>
                           <span className="font-black text-3xl md:text-4xl tracking-tighter whitespace-nowrap">{h.rate}</span>
