@@ -43,4 +43,4 @@ next-env.d.ts
 # Raw Data
 *.html
 *_files/
-all_iits_combined.json
+/all_iits_combined.json
