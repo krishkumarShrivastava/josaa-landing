@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +13,32 @@ gsap.registerPlugin(ScrollTrigger);
 import { masterColleges, collegeShortNames } from "@/data/compiledColleges";
 const colleges = masterColleges;
 
+// Helper to map raw JSON institute names to standard college IDs
+const matchInstitute = (rawName: string) => {
+  if (!rawName) return null;
+  const n = rawName.toLowerCase();
+  let typePrefix = "";
+  if (n.includes("indian institute  of technology") || n.includes("indian institute of technology")) typePrefix = "iit-";
+  else if (n.includes("national institute of technology")) typePrefix = "nit-";
+  else if (n.includes("indian institute of information technology")) typePrefix = "iiit-";
+  
+  if (typePrefix) {
+    for (const c of masterColleges) {
+       if (c.id.startsWith(typePrefix)) {
+          const locationPart = c.id.replace(typePrefix, "").replace(/-/g, " ");
+          if (n.includes(locationPart)) return c.id;
+       }
+    }
+  }
+  for (const c of masterColleges) {
+     const aliases = collegeShortNames[c.id] || [];
+     for (const a of aliases) {
+         if (a.length > 4 && n.includes(a)) return c.id;
+     }
+  }
+  return null;
+}
+
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
@@ -22,6 +47,12 @@ export default function Home() {
 
   const [activeFilter, setActiveFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Rank Predictor State
+  const [selectedRound, setSelectedRound] = useState(5);
+  const [instituteTypeToggle, setInstituteTypeToggle] = useState("Both");
+  const [cutoffData, setCutoffData] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // 3D Tilt for Search Pill
   const mouseX = useMotionValue(0.5);
@@ -52,6 +83,42 @@ export default function Home() {
       element.scrollIntoView({ behavior: "smooth" });
     }
   };
+
+  const isRankMode = /^\d+$/.test(searchQuery.trim());
+  const userRank = isRankMode ? parseInt(searchQuery.trim(), 10) : 0;
+
+  useEffect(() => {
+    if (!isRankMode) return;
+
+    let isMounted = true;
+    const fetchCutoffData = async () => {
+      setIsLoadingData(true);
+      try {
+        let dataModule;
+        switch (selectedRound) {
+          case 1: dataModule = await import("@/data/round1_cutoffs.json"); break;
+          case 2: dataModule = await import("@/data/round2_cutoffs.json"); break;
+          case 3: dataModule = await import("@/data/round3_cutoffs.json"); break;
+          case 4: dataModule = await import("@/data/round4_cutoffs.json"); break;
+          case 5: dataModule = await import("@/data/round5_cutoffs.json"); break;
+          case 6: dataModule = await import("@/data/round6_cutoffs.json"); break;
+          default: dataModule = await import("@/data/round5_cutoffs.json"); break;
+        }
+        if (isMounted) {
+          setCutoffData(dataModule.default);
+        }
+      } catch (err) {
+        console.error("Error loading cutoff data:", err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingData(false);
+        }
+      }
+    };
+    fetchCutoffData();
+
+    return () => { isMounted = false; };
+  }, [selectedRound, isRankMode]);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -92,7 +159,31 @@ export default function Home() {
     return () => ctx.revert();
   }, []);
 
+  // Compute safe matches
+  const safeMatchesByCollege = new Map<string, any[]>();
+  
+  if (isRankMode && cutoffData.length > 0) {
+    cutoffData.forEach(entry => {
+      // "Seat Type": "OPEN", "Gender": "Gender-Neutral"
+      if (entry["Seat Type"] === "OPEN" && entry["Gender"] === "Gender-Neutral") {
+        const closingRank = parseInt(entry["Closing Rank"], 10);
+        if (closingRank >= userRank) {
+          const matchedId = matchInstitute(entry["Institute"]);
+          if (matchedId) {
+             const existing = safeMatchesByCollege.get(matchedId) || [];
+             existing.push(entry);
+             safeMatchesByCollege.set(matchedId, existing);
+          }
+        }
+      }
+    });
+  }
+
   const filteredColleges = colleges.filter((c) => {
+    // 0. Institute Type Toggle
+    if (instituteTypeToggle === "IIT" && c.type !== "IITs") return false;
+    if (instituteTypeToggle === "Non-IIT" && c.type === "IITs") return false;
+
     // 1. Category Filter
     if (activeFilter !== "All" && c.type !== activeFilter) {
       return false;
@@ -100,19 +191,23 @@ export default function Home() {
     
     // 2. Search Query Filter
     if (searchQuery.trim() !== "") {
-      const query = searchQuery.toLowerCase().trim();
-      
-      // Match name
-      const matchesName = c.name.toLowerCase().includes(query);
-      
-      // Match ID directly
-      const matchesId = c.id.toLowerCase().replace(/-/g, "").includes(query.replace(/-/g, ""));
-      
-      // Match Abbreviation & Location aliases from our custom dictionary
-      const aliases = collegeShortNames[c.id] || collegeShortNames[c.id.toLowerCase()] || [];
-      const matchesAlias = aliases.some(alias => alias.toLowerCase().includes(query));
-      
-      return matchesName || matchesId || matchesAlias;
+      if (isRankMode) {
+        return safeMatchesByCollege.has(c.id);
+      } else {
+        const query = searchQuery.toLowerCase().trim();
+        
+        // Match name
+        const matchesName = c.name.toLowerCase().includes(query);
+        
+        // Match ID directly
+        const matchesId = c.id.toLowerCase().replace(/-/g, "").includes(query.replace(/-/g, ""));
+        
+        // Match Abbreviation & Location aliases from our custom dictionary
+        const aliases = collegeShortNames[c.id] || collegeShortNames[c.id.toLowerCase()] || [];
+        const matchesAlias = aliases.some(alias => alias.toLowerCase().includes(query));
+        
+        return matchesName || matchesId || matchesAlias;
+      }
     }
     
     return true;
@@ -184,9 +279,44 @@ export default function Home() {
                 className="bg-black text-white px-8 md:px-12 py-4 md:py-6 rounded-[32px] text-lg md:text-xl font-bold tracking-tight uppercase flex items-center gap-2 hover:bg-neutral-800 transition-colors shadow-[0_10px_20px_rgba(0,0,0,0.2)]"
                 style={{ transform: "translateZ(60px)" }}
               >
-                Search <ArrowRight size={24} />
+                {isLoadingData ? "Loading Data..." : "Search"} <ArrowRight size={24} className={isLoadingData ? "animate-pulse" : ""} />
               </motion.button>
             </motion.div>
+            
+            <div className="flex flex-col md:flex-row gap-4 mt-8 items-center justify-center pointer-events-auto" style={{ transform: "translateZ(40px)" }}>
+               <div className="flex bg-white/10 p-1 rounded-full backdrop-blur-md shadow-[0_10px_20px_rgba(0,0,0,0.4)] border border-white/20">
+                 {["Both", "IIT", "Non-IIT"].map((type) => (
+                   <button
+                     key={type}
+                     onClick={() => setInstituteTypeToggle(type)}
+                     className={`px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wider transition-colors ${
+                       instituteTypeToggle === type 
+                         ? "bg-white text-black shadow-sm" 
+                         : "text-white hover:text-white hover:bg-white/20"
+                     }`}
+                   >
+                     {type}
+                   </button>
+                 ))}
+               </div>
+               
+               <div className="relative group shadow-[0_10px_20px_rgba(0,0,0,0.4)] rounded-full">
+                 <select
+                   value={selectedRound}
+                   onChange={(e) => setSelectedRound(Number(e.target.value))}
+                   className="appearance-none bg-white/10 text-white border border-white/20 px-6 py-2 pr-10 rounded-full text-sm font-bold uppercase tracking-wider backdrop-blur-md outline-none cursor-pointer hover:bg-white/20 transition-colors"
+                 >
+                   {[1, 2, 3, 4, 5, 6].map((round) => (
+                     <option key={round} value={round} className="bg-neutral-900 text-white">
+                       Round {round}
+                     </option>
+                   ))}
+                 </select>
+                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white">
+                   <ChevronRight size={16} className="rotate-90" />
+                 </div>
+               </div>
+            </div>
           </div>
         </div>
       </section>
@@ -309,10 +439,24 @@ export default function Home() {
                   </div>
 
                   {/* Body with giant brutalist college name */}
-                  <div className="flex-grow flex items-end mb-8 min-w-0">
+                  <div className="flex-grow flex flex-col justify-end mb-8 min-w-0">
                     <h4 className="text-2xl md:text-3xl font-black tracking-tighter uppercase leading-none text-white break-words w-full">
                       {college.name}
                     </h4>
+                    {isRankMode && safeMatchesByCollege.has(college.id) && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                         {safeMatchesByCollege.get(college.id)?.slice(0, 3).map((match, idx) => (
+                            <span key={idx} className="bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider break-words max-w-full truncate" title={match["Academic Program Name"]}>
+                               {match["Academic Program Name"].replace(" (4 Years, Bachelor of Technology)", "").replace(" (5 Years, Bachelor and Master of Technology (Dual Degree))", "")} - Rank: {match["Closing Rank"]}
+                            </span>
+                         ))}
+                         {(safeMatchesByCollege.get(college.id)?.length || 0) > 3 && (
+                            <span className="bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
+                               +{(safeMatchesByCollege.get(college.id)?.length || 0) - 3} More Matches
+                            </span>
+                         )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom interactive action bar */}
