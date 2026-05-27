@@ -51,6 +51,14 @@ export default function Home() {
   // Rank Predictor State
   const [selectedRound, setSelectedRound] = useState(5);
   const [instituteTypeToggle, setInstituteTypeToggle] = useState("Both");
+  const [counselingMode, setCounselingMode] = useState("JoSAA");
+
+  useEffect(() => {
+    if (instituteTypeToggle === "IIT" || instituteTypeToggle === "Both") {
+      setCounselingMode("JoSAA");
+      if (selectedRound > 6) setSelectedRound(6);
+    }
+  }, [instituteTypeToggle]);
   const [cutoffData, setCutoffData] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
@@ -94,18 +102,63 @@ export default function Home() {
     const fetchCutoffData = async () => {
       setIsLoadingData(true);
       try {
-        let dataModule;
-        switch (selectedRound) {
-          case 1: dataModule = await import("@/data/round1_cutoffs.json"); break;
-          case 2: dataModule = await import("@/data/round2_cutoffs.json"); break;
-          case 3: dataModule = await import("@/data/round3_cutoffs.json"); break;
-          case 4: dataModule = await import("@/data/round4_cutoffs.json"); break;
-          case 5: dataModule = await import("@/data/round5_cutoffs.json"); break;
-          case 6: dataModule = await import("@/data/round6_cutoffs.json"); break;
-          default: dataModule = await import("@/data/round5_cutoffs.json"); break;
-        }
-        if (isMounted) {
-          setCutoffData(dataModule.default);
+        if (counselingMode === "JoSAA") {
+          let dataModule;
+          switch (selectedRound) {
+            case 1: dataModule = await import("@/data/round1_cutoffs.json"); break;
+            case 2: dataModule = await import("@/data/round2_cutoffs.json"); break;
+            case 3: dataModule = await import("@/data/round3_cutoffs.json"); break;
+            case 4: dataModule = await import("@/data/round4_cutoffs.json"); break;
+            case 5: dataModule = await import("@/data/round5_cutoffs.json"); break;
+            case 6: dataModule = await import("@/data/round6_cutoffs.json"); break;
+            default: dataModule = await import("@/data/round5_cutoffs.json"); break;
+          }
+          if (isMounted) {
+            setCutoffData(dataModule.default);
+          }
+        } else {
+          // CSAB parsing
+          const url = selectedRound === 1 ? "/CSAB20241.html" : "/CSAB20242.html";
+          const res = await fetch(url);
+          const html = await res.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+          const table = doc.querySelector("table");
+          if (!table) return;
+
+          const rows = Array.from(table.querySelectorAll("tr"));
+          const data = [];
+          const headerRow = rows.find(r => r.querySelector("th") || r.querySelector("td"));
+          if (!headerRow) return;
+          const headers = Array.from(headerRow.children).map(th => th.textContent?.trim().toLowerCase() || "");
+          const instIdx = headers.findIndex(h => h.includes("institute"));
+          const progIdx = headers.findIndex(h => h.includes("academic program"));
+          const quotaIdx = headers.findIndex(h => h.includes("quota"));
+          const catIdx = headers.findIndex(h => h.includes("seat type"));
+          const genIdx = headers.findIndex(h => h.includes("gender"));
+          const clIdx = headers.findIndex(h => h.includes("closing rank"));
+
+          for (let i = 1; i < rows.length; i++) {
+            const cells = Array.from(rows[i].children).map(td => td.textContent?.trim() || "");
+            if (cells.length > Math.max(instIdx, clIdx) && cells[instIdx] && cells[instIdx] !== "Institute") {
+              const seatType = cells[catIdx] || "";
+              let gender = cells[genIdx] || "";
+              const quota = cells[quotaIdx] || "";
+              if (gender === "Female-only (including Supernumerary)") gender = "Female Only";
+              
+              if (seatType === "OPEN" && gender === "Gender-Neutral") {
+                data.push({
+                  Institute: cells[instIdx] || "",
+                  "Academic Program Name": cells[progIdx] || "",
+                  "Quota": quota,
+                  "Seat Type": seatType,
+                  Gender: gender,
+                  "Closing Rank": cells[clIdx] || "",
+                });
+              }
+            }
+          }
+          if (isMounted) setCutoffData(data);
         }
       } catch (err) {
         console.error("Error loading cutoff data:", err);
@@ -118,7 +171,7 @@ export default function Home() {
     fetchCutoffData();
 
     return () => { isMounted = false; };
-  }, [selectedRound, isRankMode]);
+  }, [selectedRound, isRankMode, counselingMode]);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -164,8 +217,8 @@ export default function Home() {
   
   if (isRankMode && cutoffData.length > 0) {
     cutoffData.forEach(entry => {
-      // "Seat Type": "OPEN", "Gender": "Gender-Neutral"
-      if (entry["Seat Type"] === "OPEN" && entry["Gender"] === "Gender-Neutral") {
+      // "Seat Type": "OPEN", "Gender": "Gender-Neutral", Quota: "AI" or "OS"
+      if (entry["Seat Type"] === "OPEN" && entry["Gender"] === "Gender-Neutral" && (entry["Quota"] === "AI" || entry["Quota"] === "OS")) {
         const closingRank = parseInt(entry["Closing Rank"], 10);
         if (closingRank >= userRank) {
           const matchedId = matchInstitute(entry["Institute"]);
@@ -284,20 +337,40 @@ export default function Home() {
             </motion.div>
             
             <div className="flex flex-col md:flex-row gap-4 mt-8 items-center justify-center pointer-events-auto" style={{ transform: "translateZ(40px)" }}>
-               <div className="flex bg-white/10 p-1 rounded-full backdrop-blur-md shadow-[0_10px_20px_rgba(0,0,0,0.4)] border border-white/20">
-                 {["Both", "IIT", "Non-IIT"].map((type) => (
-                   <button
-                     key={type}
-                     onClick={() => setInstituteTypeToggle(type)}
-                     className={`px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wider transition-colors ${
-                       instituteTypeToggle === type 
-                         ? "bg-white text-black shadow-sm" 
-                         : "text-white hover:text-white hover:bg-white/20"
-                     }`}
-                   >
-                     {type}
-                   </button>
-                 ))}
+               <div className="flex flex-col md:flex-row gap-4 items-center">
+                 <div className="flex bg-white/10 p-1 rounded-full backdrop-blur-md shadow-[0_10px_20px_rgba(0,0,0,0.4)] border border-white/20">
+                   {["Both", "IIT", "Non-IIT"].map((type) => (
+                     <button
+                       key={type}
+                       onClick={() => setInstituteTypeToggle(type)}
+                       className={`px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wider transition-colors ${
+                         instituteTypeToggle === type 
+                           ? "bg-white text-black shadow-sm" 
+                           : "text-white hover:text-white hover:bg-white/20"
+                       }`}
+                     >
+                       {type}
+                     </button>
+                   ))}
+                 </div>
+
+                 {instituteTypeToggle === "Non-IIT" && (
+                   <div className="flex bg-white/10 p-1 rounded-full backdrop-blur-md shadow-[0_10px_20px_rgba(0,0,0,0.4)] border border-white/20">
+                     {["JoSAA", "CSAB"].map((mode) => (
+                       <button
+                         key={mode}
+                         onClick={() => { setCounselingMode(mode); setSelectedRound(1); }}
+                         className={`px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wider transition-colors ${
+                           counselingMode === mode 
+                             ? "bg-[#3B82F6] text-black shadow-[0_0_15px_rgba(59,130,246,0.6)]" 
+                             : "text-white hover:text-white hover:bg-white/20"
+                         }`}
+                       >
+                         {mode}
+                       </button>
+                     ))}
+                   </div>
+                 )}
                </div>
                
                <div className="relative group shadow-[0_10px_20px_rgba(0,0,0,0.4)] rounded-full">
@@ -306,9 +379,9 @@ export default function Home() {
                    onChange={(e) => setSelectedRound(Number(e.target.value))}
                    className="appearance-none bg-white/10 text-white border border-white/20 px-6 py-2 pr-10 rounded-full text-sm font-bold uppercase tracking-wider backdrop-blur-md outline-none cursor-pointer hover:bg-white/20 transition-colors"
                  >
-                   {[1, 2, 3, 4, 5, 6].map((round) => (
+                   {(counselingMode === "JoSAA" ? [1, 2, 3, 4, 5, 6] : [1, 2]).map((round) => (
                      <option key={round} value={round} className="bg-neutral-900 text-white">
-                       Round {round}
+                       {counselingMode === "JoSAA" ? `Round ${round}` : `SR ${round}`}
                      </option>
                    ))}
                  </select>

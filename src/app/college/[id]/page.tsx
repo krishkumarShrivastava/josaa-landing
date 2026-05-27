@@ -859,7 +859,12 @@ export default function DeepLuminousCollegePage() {
     setIsParsingCsab(true);
     
     try {
-      const url = srRound === "SR 1" ? "/CSAB20251.html" : srRound === "SR 2" ? "/CSAB20252.html" : "/CSAB20253.html";
+      let url = "";
+      if (cutoffYear === "2024") {
+        url = srRound === "SR 1" ? "/CSAB20241.html" : "/CSAB20242.html";
+      } else {
+        url = srRound === "SR 1" ? "/CSAB20251.html" : srRound === "SR 2" ? "/CSAB20252.html" : "/CSAB20253.html";
+      }
       const res = await fetch(url);
       const html = await res.text();
       const parser = new DOMParser();
@@ -1172,13 +1177,24 @@ export default function DeepLuminousCollegePage() {
                       </div>
                       <div className="flex flex-col gap-2">
                         <span className={`text-xs font-mono uppercase tracking-widest ${accentText}`}>Round</span>
+                        <div className="text-[9px] opacity-60 mb-1 leading-tight font-mono">* R: JoSAA Round | SR: CSAB Special Round</div>
                         <div className="flex gap-2 flex-wrap">
                           {_availRounds.map(r => (
                             <button key={r} onClick={() => { setCutoffRound(r); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
                               className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[1px] transition-none ${cutoffRound===r ? activeTabStyle : `${borderStyle} text-neutral-500 hover:text-white`}`}>
-                              R{r}
+                              R {r}
                             </button>
                           ))}
+                          {["2025", "2024"].includes(cutoffYear) && !(id.includes("iit") && !id.includes("iiit")) && (
+                            <>
+                              {(cutoffYear === "2025" ? ["SR 1", "SR 2", "SR 3"] : ["SR 1", "SR 2"]).map(sr => (
+                                <button key={sr} onClick={() => handleCsabRoundSelect(sr)}
+                                  className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[1px] transition-none ${cutoffRound===sr ? activeTabStyle : `${borderStyle} text-neutral-500 hover:text-white`}`}>
+                                  {sr}
+                                </button>
+                              ))}
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="ml-auto flex gap-8 items-end">
@@ -1217,9 +1233,14 @@ export default function DeepLuminousCollegePage() {
                     </div>
 
                     {/* Table */}
-                    {!_allCutoffs.length ? (
+                    {isParsingCsab ? (
                       <div className={`border-[1px] ${borderStyle} p-20 text-center bg-[#0A0A0A]`}>
-                        <p className="text-4xl font-black uppercase tracking-tighter opacity-25">No JoSAA Data Available</p>
+                        <p className={`text-4xl font-black uppercase tracking-tighter animate-pulse ${accentText}`}>Loading CSAB Data...</p>
+                        <p className="text-sm font-mono uppercase tracking-widest opacity-40 mt-4">Parsing local HTML files</p>
+                      </div>
+                    ) : !_allCutoffs.length ? (
+                      <div className={`border-[1px] ${borderStyle} p-20 text-center bg-[#0A0A0A]`}>
+                        <p className="text-4xl font-black uppercase tracking-tighter opacity-25">No Data Available</p>
                         <p className="text-sm font-mono uppercase tracking-widest opacity-20 mt-4">{cutoffYear} · Round {cutoffRound}</p>
                       </div>
                     ) : !_filtered.length ? (
@@ -1492,9 +1513,9 @@ export default function DeepLuminousCollegePage() {
                             R {r}
                           </button>
                         ))}
-                        {cutoffYear === "2025" && COLLEGE_DATA.basicInfo.type !== "IIT" && (
+                        {["2025", "2024"].includes(cutoffYear) && !(id.includes("iit") && !id.includes("iiit")) && (
                           <>
-                            {["SR 1", "SR 2", "SR 3"].map(sr => (
+                            {(cutoffYear === "2025" ? ["SR 1", "SR 2", "SR 3"] : ["SR 1", "SR 2"]).map(sr => (
                               <button key={sr} onClick={() => handleCsabRoundSelect(sr)}
                                 className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[2px] transition-none ${cutoffRound===sr?"bg-[#3B82F6] text-black border-[#3B82F6]":"border-[#1E293B] text-neutral-400 hover:text-white hover:border-white"}`}>
                                 {sr}
