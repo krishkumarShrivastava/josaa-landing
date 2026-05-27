@@ -78,6 +78,24 @@ const COLLEGE_ID_TO_JOSAA: Record<string, string[]> = {
   "iit-bhilai":      ["Indian Institute of Technology Bhilai"],
 };
 
+function getJoSAACutoffsFromCsab(collegeId: string, exactName: string, csabData: any[]) {
+  const norm = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const names = (COLLEGE_ID_TO_JOSAA[collegeId] ?? []).map(norm);
+  return csabData
+    .filter(r => names.length > 0
+      ? names.some(n => norm(r.Institute) === n)
+      : norm(r.Institute) === norm(exactName) || norm(r.Institute).includes(collegeId.replace(/-/g, " "))
+    )
+    .map(r => ({
+      branch: r["Academic Program Name"],
+      quota: r.Quota,
+      category: r["Seat Type"],
+      gender: r.Gender === "Female-only (including Supernumerary)" ? "Female Only" : r.Gender,
+      openingRank: parseInt(r["Opening Rank"]) || 0,
+      closingRank: parseInt(r["Closing Rank"]) || 0,
+    }));
+}
+
 function getJoSAACutoffs(collegeId: string, exactName: string, year: string, roundNum: number) {
   const data = JOSAA_ROUND_DATA[year]?.[roundNum];
   if (!data) return [];
@@ -831,7 +849,59 @@ export default function DeepLuminousCollegePage() {
 
   // Cutoff tab state
   const [cutoffYear, setCutoffYear] = useState("2025");
-  const [cutoffRound, setCutoffRound] = useState(6);
+  const [cutoffRound, setCutoffRound] = useState<number | string>(6);
+  const [csabData, setCsabData] = useState<any[]>([]);
+  const [isParsingCsab, setIsParsingCsab] = useState(false);
+
+  const handleCsabRoundSelect = async (srRound: string) => {
+    setCutoffRound(srRound);
+    setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch("");
+    setIsParsingCsab(true);
+    
+    try {
+      const url = srRound === "SR 1" ? "/CSAB20251.html" : srRound === "SR 2" ? "/CSAB20252.html" : "/CSAB20253.html";
+      const res = await fetch(url);
+      const html = await res.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const table = doc.querySelector("table");
+      if (!table) return;
+
+      const rows = Array.from(table.querySelectorAll("tr"));
+      const data: any[] = [];
+      const headerRow = rows.find(r => r.querySelector("th") || r.querySelector("td"));
+      if (!headerRow) return;
+      const headers = Array.from(headerRow.children).map(th => th.textContent?.trim().toLowerCase() || "");
+      const instIdx = headers.findIndex(h => h.includes("institute"));
+      const progIdx = headers.findIndex(h => h.includes("academic program"));
+      const quotaIdx = headers.findIndex(h => h.includes("quota"));
+      const catIdx = headers.findIndex(h => h.includes("seat type"));
+      const genIdx = headers.findIndex(h => h.includes("gender"));
+      const opIdx = headers.findIndex(h => h.includes("opening rank"));
+      const clIdx = headers.findIndex(h => h.includes("closing rank"));
+
+      for (let i = 1; i < rows.length; i++) {
+        const cells = Array.from(rows[i].children).map(td => td.textContent?.trim() || "");
+        if (cells.length > Math.max(instIdx, clIdx) && cells[instIdx] && cells[instIdx] !== "Institute") {
+          data.push({
+            Institute: cells[instIdx] || "",
+            "Academic Program Name": cells[progIdx] || "",
+            Quota: cells[quotaIdx] || "",
+            "Seat Type": cells[catIdx] || "",
+            Gender: cells[genIdx] || "",
+            "Opening Rank": cells[opIdx] || "",
+            "Closing Rank": cells[clIdx] || "",
+          });
+        }
+      }
+      setCsabData(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsParsingCsab(false);
+    }
+  };
+
   const [cutoffQuota, setCutoffQuota] = useState("All");
   const [cutoffCategory, setCutoffCategory] = useState("All");
   const [cutoffGender, setCutoffGender] = useState("All");
@@ -1071,7 +1141,7 @@ export default function DeepLuminousCollegePage() {
               (() => {
                 const exactCollegeInfo = allIitsData.find(c => c.collegeId === id);
                 const actualExactName = exactCollegeInfo ? exactCollegeInfo.basicInfo.name : instName;
-                const _allCutoffs = getJoSAACutoffs(id, actualExactName, cutoffYear, cutoffRound);
+                const _allCutoffs = typeof cutoffRound === "string" ? getJoSAACutoffsFromCsab(id, actualExactName, csabData) : getJoSAACutoffs(id, actualExactName, cutoffYear, cutoffRound as number);
                 const _cutoffQuotas     = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.quota))).sort()];
                 const _cutoffCategories = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.category))).sort()];
                 const _cutoffGenders    = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.gender))).sort()];
@@ -1383,7 +1453,7 @@ export default function DeepLuminousCollegePage() {
             </div>
           ) : activeTab === "Cutoffs" ? (
             (() => {
-              const _allCutoffs = getJoSAACutoffs(id, COLLEGE_DATA.basicInfo?.name || "", cutoffYear, cutoffRound);
+              const _allCutoffs = typeof cutoffRound === "string" ? getJoSAACutoffsFromCsab(id, COLLEGE_DATA.basicInfo?.name || "", csabData) : getJoSAACutoffs(id, COLLEGE_DATA.basicInfo?.name || "", cutoffYear, cutoffRound as number);
               const _cutoffQuotas     = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.quota))).sort()];
               const _cutoffCategories = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.category))).sort()];
               const _cutoffGenders    = ["All", ...Array.from(new Set(_allCutoffs.map(r => r.gender))).sort()];
@@ -1414,13 +1484,24 @@ export default function DeepLuminousCollegePage() {
                     </div>
                     <div className="flex flex-col gap-2">
                       <span className="text-xs font-mono uppercase tracking-widest opacity-40">Round</span>
+                      <div className="text-[9px] opacity-60 mb-1 leading-tight font-mono">* R: JoSAA Round | SR: CSAB Special Round</div>
                       <div className="flex gap-2 flex-wrap">
                         {_availRounds.map(r => (
                           <button key={r} onClick={() => { setCutoffRound(r); setCutoffQuota("All"); setCutoffCategory("All"); setCutoffGender("All"); setCutoffBranch("All"); setCutoffSearch(""); }}
                             className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[2px] transition-none ${cutoffRound===r?"bg-[#3B82F6] text-black border-[#3B82F6]":"border-[#1E293B] text-neutral-400 hover:text-white hover:border-white"}`}>
-                            R{r}
+                            R {r}
                           </button>
                         ))}
+                        {cutoffYear === "2025" && COLLEGE_DATA.basicInfo.type !== "IIT" && (
+                          <>
+                            {["SR 1", "SR 2", "SR 3"].map(sr => (
+                              <button key={sr} onClick={() => handleCsabRoundSelect(sr)}
+                                className={`px-4 py-2 text-lg font-black tracking-tighter uppercase border-[2px] transition-none ${cutoffRound===sr?"bg-[#3B82F6] text-black border-[#3B82F6]":"border-[#1E293B] text-neutral-400 hover:text-white hover:border-white"}`}>
+                                {sr}
+                              </button>
+                            ))}
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="ml-auto flex gap-8 items-end">
